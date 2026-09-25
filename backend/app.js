@@ -18,7 +18,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '2mb' })); // covers canvas snapshot data URLs
+app.use(express.json({ limit: '10mb' })); // headroom for future HTTP snapshot endpoints; scene sync itself runs over Socket.IO
 app.use(cookieParser());
 app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
 

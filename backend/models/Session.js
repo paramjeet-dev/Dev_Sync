@@ -23,11 +23,20 @@ const sessionSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
-    // Optional persisted whiteboard snapshot (see APP_FLOW.md section 13 —
-    // "a more advanced implementation can add whiteboard snapshots").
-    canvasSnapshot: {
-      type: String, // base64 PNG data URL, or null
-      default: null,
+    // Persisted whiteboard scene, using Excalidraw's element/file model
+    // (see APP_FLOW.md section 13 — "a more advanced implementation can
+    // add whiteboard snapshots"). `elements` is the array of Excalidraw
+    // scene elements (shapes, arrows, freedraw, images, text...); `files`
+    // holds binary image data keyed by Excalidraw's fileId, base64-encoded.
+    // Stored as Mixed rather than a strict sub-schema because Excalidraw's
+    // element shape evolves with library versions and is not ours to model.
+    canvasElements: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    canvasFiles: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
     lastActivityAt: {
       type: Date,
@@ -43,7 +52,7 @@ sessionSchema.methods.toPublicJSON = function toPublicJSON() {
     sessionId: this.sessionId,
     name: this.name,
     createdBy: this.createdBy.toString(),
-    hasSnapshot: !!this.canvasSnapshot,
+    hasSnapshot: Array.isArray(this.canvasElements) && this.canvasElements.length > 0,
     createdAt: this.createdAt,
     lastActivityAt: this.lastActivityAt,
   };

@@ -2,25 +2,28 @@ import { useCallback, useRef } from 'react';
 
 const CLIENT_THROTTLE_MS = 40;
 
-export function useCursorEmitter(socket, canvasRef) {
+/**
+ * Wraps Excalidraw's onPointerUpdate callback, which already reports
+ * pointer position in *scene* coordinates (i.e. already accounting for the
+ * user's own zoom/pan) — so remote clients only need their own zoom/pan
+ * applied on render, not the sender's. This is why cursor sync moved off
+ * raw DOM pointer events onto Excalidraw's own coordinate system when the
+ * whiteboard switched to an infinite/zoomable canvas.
+ */
+export function useCursorEmitter(socket) {
   const lastSent = useRef(0);
 
-  const emitCursor = useCallback(
-    (clientX, clientY) => {
-      if (!socket || !canvasRef.current) return;
+  const handlePointerUpdate = useCallback(
+    ({ pointer }) => {
+      if (!socket || !pointer) return;
       const now = Date.now();
       if (now - lastSent.current < CLIENT_THROTTLE_MS) return;
       lastSent.current = now;
 
-      const canvas = canvasRef.current;
-      const rect = canvas.getBoundingClientRect();
-      const x = ((clientX - rect.left) / rect.width) * canvas.width;
-      const y = ((clientY - rect.top) / rect.height) * canvas.height;
-
-      socket.emit('cursor:move', { x, y });
+      socket.emit('cursor:move', { x: pointer.x, y: pointer.y });
     },
-    [socket, canvasRef]
+    [socket]
   );
 
-  return emitCursor;
+  return handlePointerUpdate;
 }

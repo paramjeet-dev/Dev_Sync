@@ -1,72 +1,21 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
-import { useCanvas } from '../hooks/useCanvas';
-import { useCursorEmitter } from '../hooks/useCursorEmitter';
 import { useAuth } from '../context/AuthContext';
-import Canvas from '../components/Canvas/Canvas';
-import Toolbar from '../components/Toolbar/Toolbar';
+import { useTheme } from '../context/ThemeContext';
+import Whiteboard from '../components/Canvas/Whiteboard';
 import PresenceList from '../components/Presence/PresenceList';
-import RemoteCursors from '../components/RemoteCursors/RemoteCursors';
 import ChatPanel from '../components/Chat/ChatPanel';
 import TranscriptionControl from '../components/Transcription/TranscriptionControl';
-import { fetchSnapshot } from '../services/chatApi';
+import { useState } from 'react';
 
 export default function WorkspacePage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { darkMode, toggleDarkMode } = useTheme();
   const [rightTab, setRightTab] = useState('chat'); // 'chat' | 'voice'
 
   const { socket, connected, joinError, participants, selfSocketId } = useSocket(sessionId);
-
-  const canvasApi = useCanvas({
-    onLocalStroke: (payload) => {
-      if (!socket || !connected) return;
-      if (payload.type === 'clear') {
-        socket.emit('drawing:clear');
-      } else {
-        socket.emit('drawing:event', payload);
-      }
-    },
-  });
-
-  const emitCursor = useCursorEmitter(socket, canvasApi.canvasRef);
-
-  // Restore any previously saved whiteboard snapshot on join.
-  useEffect(() => {
-    let cancelled = false;
-    async function restoreSnapshot() {
-      try {
-        const snapshot = await fetchSnapshot(sessionId);
-        if (!cancelled && snapshot) {
-          canvasApi.loadSnapshotImage(snapshot);
-        }
-      } catch (err) {
-        // Non-fatal: workspace still usable without a restored snapshot.
-      }
-    }
-    restoreSnapshot();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
-
-  // Periodically persist a snapshot so reconnecting clients can restore state
-  // (APP_FLOW.md section 13).
-  useEffect(() => {
-    if (!socket || !connected) return undefined;
-    const interval = setInterval(() => {
-      const dataUrl = canvasApi.exportSnapshot();
-      if (dataUrl) socket.emit('drawing:snapshot:save', { dataUrl });
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [socket, connected, canvasApi]);
-
-  function handlePointerMoveForCursor(e) {
-    emitCursor(e.clientX, e.clientY);
-  }
 
   function handleLeave() {
     navigate('/lobby');
@@ -89,6 +38,9 @@ export default function WorkspacePage() {
         </div>
         <div className="workspace-header-actions">
           <PresenceList participants={participants} selfSocketId={selfSocketId} />
+          <button onClick={toggleDarkMode} title="Toggle dark mode">
+            {darkMode ? '☀️ Light' : '🌙 Dark'}
+          </button>
           <span className="current-user">{user?.username}</span>
           <button onClick={handleLeave}>Leave</button>
           <button onClick={handleLogout} className="danger">
@@ -101,23 +53,12 @@ export default function WorkspacePage() {
 
       <div className="workspace-body">
         <div className="workspace-main">
-          <Toolbar
-            tool={canvasApi.tool}
-            setTool={canvasApi.setTool}
-            color={canvasApi.color}
-            setColor={canvasApi.setColor}
-            lineWidth={canvasApi.lineWidth}
-            setLineWidth={canvasApi.setLineWidth}
-            onUndo={canvasApi.undo}
-            onRedo={canvasApi.redo}
-            canUndo={canvasApi.canUndo}
-            canRedo={canvasApi.canRedo}
-            onClear={() => canvasApi.clearCanvas({ broadcast: true })}
+          <Whiteboard
+            socket={socket}
+            connected={connected}
+            sessionId={sessionId}
+            darkMode={darkMode}
           />
-          <div className="canvas-area" onPointerMove={handlePointerMoveForCursor}>
-            <Canvas canvasApi={canvasApi} socket={socket} connected={connected} />
-            <RemoteCursors socket={socket} canvasRef={canvasApi.canvasRef} />
-          </div>
         </div>
 
         <aside className="workspace-sidebar">

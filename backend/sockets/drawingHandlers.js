@@ -1,57 +1,59 @@
 const { saveSnapshot } = require('../services/sessionService');
 
 /**
- * Validates a minimal drawing payload shape. Kept intentionally loose since
- * the exact stroke representation is a client-side rendering concern (see
- * TRD section 4 — payload shape is conceptual, not contractual).
+ * A "scene update" payload is a batch of changed/new Excalidraw elements
+ * (not the whole scene) plus any new binary files (images) referenced by
+ * those elements. Each element carries its own `id` and `version` — the
+ * receiving client (and the persisted snapshot) resolve conflicts by
+ * keeping the higher version per element id, matching Excalidraw's own
+ * reference collaboration approach.
  */
-function isValidDrawingPayload(payload) {
+function isValidScenePayload(payload) {
   if (!payload || typeof payload !== 'object') return false;
-  if (!payload.type || typeof payload.type !== 'string') return false;
+  if (!Array.isArray(payload.elements)) return false;
   return true;
 }
 
 function registerDrawingHandlers(io, socket) {
-  // Covers stroke-start / stroke-update / stroke-end via a single generic
-  // event type field, so the client can send whichever phase it's in.
-  socket.on('drawing:event', (payload) => {
+  socket.on('scene:update', (payload) => {
     const sessionId = socket.data.sessionId;
     if (!sessionId) return; // must have joined a session first
-    if (!isValidDrawingPayload(payload)) return;
+    if (!isValidScenePayload(payload)) return;
 
     const enriched = {
-      ...payload,
-      sessionId,
+      elements: payload.elements,
+      files: payload.files || {},
       userId: socket.user.id,
       username: socket.user.username,
       socketId: socket.id,
       ts: Date.now(),
     };
 
-    // Broadcast to everyone else in the room — the sender already rendered
-    // its own stroke locally, so it is excluded (see IMPLEMENTATION_FLOW.md
+    // Broadcast to everyone else in the room — the sender already applied
+    // this change to its own local scene (see IMPLEMENTATION_FLOW.md
     // Phase 4 "Implementation Concern").
-    socket.to(sessionId).emit('drawing:event', enriched);
+    socket.to(sessionId).emit('scene:update', enriched);
   });
 
-  // Clear canvas for everyone (e.g. a toolbar "clear" action).
-  socket.on('drawing:clear', () => {
+  // Full-scene clear (toolbar "clear canvas" action).
+  socket.on('scene:clear', () => {
     const sessionId = socket.data.sessionId;
     if (!sessionId) return;
-    socket.to(sessionId).emit('drawing:clear', {
+    socket.to(sessionId).emit('scene:clear', {
       userId: socket.user.id,
       username: socket.user.username,
     });
   });
 
-  // Optional whiteboard snapshot persistence (APP_FLOW.md section 13 /
-  // Session model canvasSnapshot). Client can periodically or on-demand
-  // request a snapshot save so a reconnecting client can restore state.
-  socket.on('drawing:snapshot:save', async ({ dataUrl } = {}, ack) => {
+  // Periodic/on-demand persistence so a reconnecting client (or one joining
+  // mid-session) can restore the whiteboard (APP_FLOW.md section 13).
+  // Server-side merge by element version makes this safe even if multiple
+  // clients save around the same time (see sessionService.saveSnapshot).
+  socket.on('scene:snapshot:save', async ({ elements, files } = {}, ack) => {
     const sessionId = socket.data.sessionId;
-    if (!sessionId || !dataUrl) return ack?.({ ok: false });
+    if (!sessionId || !Array.isArray(elements)) return ack?.({ ok: false });
     try {
-      await saveSnapshot(sessionId, dataUrl);
+      await saveSnapshot(sessionId, { elements, files: files || {} });
       ack?.({ ok: true });
     } catch (err) {
       ack?.({ ok: false, error: 'Failed to save snapshot.' });

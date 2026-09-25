@@ -35,17 +35,35 @@ async function touchSession(sessionId) {
   );
 }
 
-async function saveSnapshot(sessionId, dataUrl) {
-  await Session.findOneAndUpdate(
-    { sessionId },
-    { $set: { canvasSnapshot: dataUrl, lastActivityAt: new Date() } },
-    { upsert: false }
-  );
+/**
+ * Merges an incoming batch of Excalidraw elements into the session's
+ * persisted scene, keeping the higher-`version` copy of each element by id
+ * (Excalidraw's own conflict rule — see frontend sync layer). This makes
+ * snapshot saves safe to call concurrently from multiple clients without a
+ * later, staler save clobbering newer edits.
+ */
+async function saveSnapshot(sessionId, { elements = [], files = {} } = {}) {
+  const session = await Session.findOne({ sessionId });
+  if (!session) return;
+
+  const merged = new Map((session.canvasElements || []).map((el) => [el.id, el]));
+  elements.forEach((el) => {
+    const existing = merged.get(el.id);
+    if (!existing || (el.version ?? 0) >= (existing.version ?? 0)) {
+      merged.set(el.id, el);
+    }
+  });
+
+  session.canvasElements = Array.from(merged.values());
+  session.canvasFiles = { ...(session.canvasFiles || {}), ...files };
+  session.lastActivityAt = new Date();
+  await session.save();
 }
 
 async function getSnapshot(sessionId) {
-  const session = await Session.findOne({ sessionId }).select('canvasSnapshot');
-  return session ? session.canvasSnapshot : null;
+  const session = await Session.findOne({ sessionId }).select('canvasElements canvasFiles');
+  if (!session) return null;
+  return { elements: session.canvasElements || [], files: session.canvasFiles || {} };
 }
 
 module.exports = {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const CURSOR_COLORS = ['#F87171', '#FB923C', '#FBBF24', '#A3E635', '#34D399', '#22D3EE', '#60A5FA', '#A78BFA'];
 
@@ -10,25 +10,26 @@ function colorForUser(userId) {
   return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
 }
 
-// Cursor coordinates are broadcast in canvas pixel space; this component
-// scales them into the current rendered canvas size for overlay positioning.
-export default function RemoteCursors({ socket, canvasRef }) {
+/**
+ * Renders remote cursors as a fixed overlay positioned in *screen* space,
+ * converted each render from the sender's *scene*-space coordinates using
+ * this client's own current zoom/pan (excalidrawAPI.getAppState()). Cursor
+ * positions are sent in scene coordinates (see useCursorEmitter) precisely
+ * so that each viewer's own zoom/pan is what determines their screen
+ * position — a cursor at the same drawn point looks correct regardless of
+ * how far each participant has independently zoomed/panned.
+ */
+export default function RemoteCursors({ socket, excalidrawAPI }) {
   const [cursors, setCursors] = useState({}); // socketId -> { x, y, username, userId }
-  const canvasSizeRef = useRef({ width: 1, height: 1 });
+  const [, forceRerender] = useState(0);
 
+  // Re-render on pan/zoom so cursor screen positions stay correct even
+  // when the local user's own viewport changes without a new cursor event.
   useEffect(() => {
-    function updateCanvasSize() {
-      if (canvasRef.current) {
-        canvasSizeRef.current = {
-          width: canvasRef.current.width,
-          height: canvasRef.current.height,
-        };
-      }
-    }
-    updateCanvasSize();
-    window.addEventListener('resize', updateCanvasSize);
-    return () => window.removeEventListener('resize', updateCanvasSize);
-  }, [canvasRef]);
+    if (!excalidrawAPI) return undefined;
+    const interval = setInterval(() => forceRerender((n) => n + 1), 100);
+    return () => clearInterval(interval);
+  }, [excalidrawAPI]);
 
   useEffect(() => {
     if (!socket) return undefined;
@@ -67,28 +68,29 @@ export default function RemoteCursors({ socket, canvasRef }) {
     };
   }, [socket]);
 
-  const canvas = canvasRef.current;
-  const rect = canvas ? canvas.getBoundingClientRect() : null;
-  const scaleX = rect && canvas ? rect.width / canvas.width : 1;
-  const scaleY = rect && canvas ? rect.height / canvas.height : 1;
+  if (!excalidrawAPI) return null;
+
+  const appState = excalidrawAPI.getAppState();
+  const { scrollX, scrollY, zoom } = appState;
 
   return (
     <div className="remote-cursors-layer">
-      {Object.entries(cursors).map(([socketId, cursor]) => (
-        <div
-          key={socketId}
-          className="remote-cursor"
-          style={{
-            left: cursor.x * scaleX,
-            top: cursor.y * scaleY,
-          }}
-        >
-          <div className="cursor-dot" style={{ backgroundColor: colorForUser(cursor.userId) }} />
-          <span className="cursor-label" style={{ backgroundColor: colorForUser(cursor.userId) }}>
-            {cursor.username}
-          </span>
-        </div>
-      ))}
+      {Object.entries(cursors).map(([socketId, cursor]) => {
+        // Scene coordinates -> screen coordinates, using this viewer's own
+        // current scroll/zoom (same transform Excalidraw applies to its
+        // own elements when rendering).
+        const screenX = (cursor.x + scrollX) * zoom.value;
+        const screenY = (cursor.y + scrollY) * zoom.value;
+
+        return (
+          <div key={socketId} className="remote-cursor" style={{ left: screenX, top: screenY }}>
+            <div className="cursor-dot" style={{ backgroundColor: colorForUser(cursor.userId) }} />
+            <span className="cursor-label" style={{ backgroundColor: colorForUser(cursor.userId) }}>
+              {cursor.username}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -12,6 +12,10 @@ function initSocketServer(httpServer) {
       origin: config.clientOrigin,
       credentials: true,
     },
+    // Default is 1MB; scene payloads carrying embedded images (Excalidraw
+    // image elements) can exceed that, so raise it. Still bounded to guard
+    // against abuse — matches the transcription upload ceiling in spirit.
+    maxHttpBufferSize: 10 * 1024 * 1024,
   });
 
   io.use(socketAuthMiddleware);
