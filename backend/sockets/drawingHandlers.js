@@ -1,4 +1,4 @@
-const { saveSnapshot } = require('../services/sessionService');
+const { saveSnapshot, clearSnapshot, isAcceptableImageFile } = require('../services/sessionService');
 
 /**
  * A "scene update" payload is a batch of changed/new Excalidraw elements
@@ -14,6 +14,23 @@ function isValidScenePayload(payload) {
   return true;
 }
 
+/**
+ * Server-side re-validation of incoming files, independent of whatever the
+ * sending client already filtered. This is the real trust boundary — the
+ * frontend's own size/type check (useExcalidrawSync.js) is only a UX
+ * nicety and could be bypassed by a modified client or a hand-crafted
+ * socket event, which would otherwise let one connection push an
+ * arbitrarily large payload at every other peer in the room in real time,
+ * independent of whether it ever gets persisted.
+ */
+function filterAcceptableFiles(files) {
+  const accepted = {};
+  Object.entries(files || {}).forEach(([fileId, file]) => {
+    if (isAcceptableImageFile(file)) accepted[fileId] = file;
+  });
+  return accepted;
+}
+
 function registerDrawingHandlers(io, socket) {
   socket.on('scene:update', (payload) => {
     const sessionId = socket.data.sessionId;
@@ -22,7 +39,7 @@ function registerDrawingHandlers(io, socket) {
 
     const enriched = {
       elements: payload.elements,
-      files: payload.files || {},
+      files: filterAcceptableFiles(payload.files),
       userId: socket.user.id,
       username: socket.user.username,
       socketId: socket.id,
@@ -35,14 +52,24 @@ function registerDrawingHandlers(io, socket) {
     socket.to(sessionId).emit('scene:update', enriched);
   });
 
-  // Full-scene clear (toolbar "clear canvas" action).
-  socket.on('scene:clear', () => {
+  // Full-scene clear (toolbar "clear canvas" action). Clears the persisted
+  // snapshot too, not just the connected clients' in-memory scenes —
+  // otherwise the pre-clear board silently reappears for the next client
+  // that joins or refreshes (see sessionService.clearSnapshot).
+  socket.on('scene:clear', async () => {
     const sessionId = socket.data.sessionId;
     if (!sessionId) return;
     socket.to(sessionId).emit('scene:clear', {
       userId: socket.user.id,
       username: socket.user.username,
     });
+    try {
+      await clearSnapshot(sessionId);
+    } catch (err) {
+      // Non-fatal for the live clear (clients already cleared their local
+      // scenes); the next periodic snapshot save will simply re-persist
+      // whatever state clients are in at that point.
+    }
   });
 
   // Periodic/on-demand persistence so a reconnecting client (or one joining

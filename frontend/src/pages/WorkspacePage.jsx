@@ -30,8 +30,8 @@ export default function WorkspacePage() {
     <div className="workspace-page">
       <header className="workspace-header">
         <div className="workspace-title">
-          <strong>Dev-Sync</strong>
-          <span className="session-code">Room: {sessionId}</span>
+          <span className="workspace-wordmark">Dev-Sync</span>
+          <span className="session-code">{sessionId}</span>
           <span className={`connection-badge ${connected ? 'online' : 'offline'}`}>
             {connected ? 'Connected' : 'Connecting…'}
           </span>
@@ -39,7 +39,7 @@ export default function WorkspacePage() {
         <div className="workspace-header-actions">
           <PresenceList participants={participants} selfSocketId={selfSocketId} />
           <button onClick={toggleDarkMode} title="Toggle dark mode">
-            {darkMode ? '☀️ Light' : '🌙 Dark'}
+            {darkMode ? '☀️' : '🌙'}
           </button>
           <span className="current-user">{user?.username}</span>
           <button onClick={handleLeave}>Leave</button>

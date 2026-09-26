@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createSession, fetchSession } from '../services/chatApi';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function LobbyPage() {
   const { user, logout } = useAuth();
+  const { darkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
+  const [mode, setMode] = useState('create'); // 'create' | 'join'
   const [roomName, setRoomName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState(null);
@@ -49,8 +52,11 @@ export default function LobbyPage() {
   return (
     <div className="lobby-page">
       <header className="lobby-header">
-        <strong>Dev-Sync</strong>
-        <div>
+        <span className="lobby-wordmark">Dev-Sync</span>
+        <div className="lobby-header-actions">
+          <button onClick={toggleDarkMode} title="Toggle dark mode">
+            {darkMode ? '☀️' : '🌙'}
+          </button>
           <span className="current-user">{user?.username}</span>
           <button onClick={handleLogout} className="danger">
             Log out
@@ -58,35 +64,51 @@ export default function LobbyPage() {
         </div>
       </header>
 
-      <div className="lobby-cards">
-        <form className="lobby-card" onSubmit={handleCreate}>
-          <h2>Create a room</h2>
-          <input
-            type="text"
-            placeholder="Room name (optional)"
-            value={roomName}
-            onChange={(e) => setRoomName(e.target.value)}
-          />
-          <button type="submit" disabled={busy}>
-            {busy ? 'Creating…' : 'Create & join'}
-          </button>
-        </form>
+      <main className="lobby-main">
+        <div className="lobby-hero">
+          <h1>Where's the board?</h1>
+          <p>Start a fresh session, or drop in on one your team already has open.</p>
+        </div>
 
-        <form className="lobby-card" onSubmit={handleJoin}>
-          <h2>Join a room</h2>
-          <input
-            type="text"
-            placeholder="Room code"
-            value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value)}
-          />
-          <button type="submit" disabled={busy}>
-            {busy ? 'Joining…' : 'Join'}
+        <div className="lobby-switch">
+          <button className={mode === 'create' ? 'active' : ''} onClick={() => setMode('create')}>
+            Create
           </button>
-        </form>
-      </div>
+          <button className={mode === 'join' ? 'active' : ''} onClick={() => setMode('join')}>
+            Join
+          </button>
+        </div>
 
-      {error && <div className="auth-error">{error}</div>}
+        {mode === 'create' ? (
+          <form className="lobby-panel" onSubmit={handleCreate}>
+            <input
+              type="text"
+              placeholder="Room name (optional)"
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+              autoFocus
+            />
+            <button type="submit" className="primary" disabled={busy}>
+              {busy ? 'Creating…' : 'Create & join'}
+            </button>
+          </form>
+        ) : (
+          <form className="lobby-panel" onSubmit={handleJoin}>
+            <input
+              type="text"
+              placeholder="Room code"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              autoFocus
+            />
+            <button type="submit" className="primary" disabled={busy}>
+              {busy ? 'Joining…' : 'Join'}
+            </button>
+          </form>
+        )}
+
+        {error && <div className="auth-error">{error}</div>}
+      </main>
     </div>
   );
 }

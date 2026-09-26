@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 
-const CURSOR_COLORS = ['#F87171', '#FB923C', '#FBBF24', '#A3E635', '#34D399', '#22D3EE', '#60A5FA', '#A78BFA'];
+// Matches PresenceList's curated palette — the same user gets the same
+// color in both their avatar and their cursor label, and both sit
+// comfortably next to the app's own violet/teal accents.
+const CURSOR_COLORS = ['#E56399', '#E8823C', '#D4A72C', '#5FA85C', '#3FAE9A', '#4A9FD8', '#6E56CF', '#9257C9'];
 
 function colorForUser(userId) {
   let hash = 0;

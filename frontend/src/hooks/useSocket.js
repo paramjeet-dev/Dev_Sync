@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
  * participant list from the join acknowledgement.
  */
 export function useSocket(sessionId) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
   const [joinError, setJoinError] = useState(null);
@@ -16,13 +16,12 @@ export function useSocket(sessionId) {
   const [selfSocketId, setSelfSocketId] = useState(null);
 
   useEffect(() => {
-    if (!token || !sessionId) return undefined;
+    if (!isAuthenticated || !sessionId) return undefined;
 
-    const socket = getSocket(token);
+    // Authenticates via the httpOnly cookie (see services/socket.js) —
+    // nothing token-related to pass or refresh here.
+    const socket = getSocket();
     socketRef.current = socket;
-
-    // Token may have changed since the socket singleton was created.
-    socket.auth = { token };
 
     function handleConnect() {
       setConnected(true);
@@ -68,7 +67,7 @@ export function useSocket(sessionId) {
       socket.off('presence:update', handlePresenceUpdate);
       socket.off('connect_error', handleConnectError);
     };
-  }, [token, sessionId]);
+  }, [isAuthenticated, sessionId]);
 
   return { socket: socketRef.current, connected, joinError, participants, selfSocketId };
 }

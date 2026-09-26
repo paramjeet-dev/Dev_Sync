@@ -13,8 +13,8 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={<AuthPage><LoginForm /></AuthPage>} />
-            <Route path="/signup" element={<AuthPage><SignupForm /></AuthPage>} />
+            <Route path="/login" element={<LoginForm />} />
+            <Route path="/signup" element={<SignupForm />} />
             <Route
               path="/lobby"
               element={
@@ -38,8 +38,4 @@ export default function App() {
       </AuthProvider>
     </ThemeProvider>
   );
-}
-
-function AuthPage({ children }) {
-  return <div className="auth-page">{children}</div>;
 }

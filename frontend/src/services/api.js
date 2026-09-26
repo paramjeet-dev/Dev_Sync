@@ -2,19 +2,13 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
+// Authenticates purely via the httpOnly cookie the backend sets on
+// signup/login (withCredentials sends it automatically on every request).
+// Deliberately no Authorization header sourced from localStorage/JS-
+// readable storage — see AuthContext.jsx for the reasoning.
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true, // send the httpOnly auth cookie
-});
-
-// Also attach the token as a bearer header for environments where the
-// cookie isn't available (e.g. cross-site setups), sourced from localStorage.
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('dev_sync_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  withCredentials: true,
 });
 
 export default api;

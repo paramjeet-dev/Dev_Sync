@@ -1,4 +1,7 @@
-const AVATAR_COLORS = ['#F87171', '#FB923C', '#FBBF24', '#A3E635', '#34D399', '#22D3EE', '#60A5FA', '#A78BFA'];
+// A curated set of hues chosen to sit comfortably alongside the app's
+// violet accent and teal "live" color, rather than a generic rainbow —
+// avoids a returning user's avatar color clashing with the UI's own palette.
+const AVATAR_COLORS = ['#E56399', '#E8823C', '#D4A72C', '#5FA85C', '#3FAE9A', '#4A9FD8', '#6E56CF', '#9257C9'];
 
 function colorForUser(userId) {
   let hash = 0;
@@ -18,7 +21,7 @@ export default function PresenceList({ participants, selfSocketId }) {
         {participants.map((p) => (
           <div
             key={p.socketId}
-            className="presence-avatar"
+            className={`presence-avatar ${p.socketId === selfSocketId ? 'is-self' : ''}`}
             style={{ backgroundColor: colorForUser(p.userId) }}
             title={p.username + (p.socketId === selfSocketId ? ' (you)' : '')}
           >

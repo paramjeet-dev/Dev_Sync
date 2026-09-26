@@ -15,12 +15,21 @@ import { fetchSnapshot } from '../../services/chatApi';
 export default function Whiteboard({ socket, connected, sessionId, darkMode }) {
   const [excalidrawAPI, setExcalidrawAPI] = useState(null);
   const [restored, setRestored] = useState(false);
+  const [imageWarning, setImageWarning] = useState(null);
 
-  const { handleChange, clearScene, loadInitialScene } = useExcalidrawSync({
+  const { handleChange, clearScene, loadInitialScene, setOnRejectedFile } = useExcalidrawSync({
     socket,
     connected,
     excalidrawAPI,
   });
+
+  useEffect(() => {
+    setOnRejectedFile((file) => {
+      setImageWarning(
+        `"${file?.mimeType || 'image'}" wasn't synced — images must be under 3MB and a common format (PNG/JPEG/GIF/WebP/SVG). It's still visible on your own screen but other participants won't see it.`
+      );
+    });
+  }, [setOnRejectedFile]);
 
   const handlePointerUpdate = useCursorEmitter(socket);
 
@@ -106,6 +115,15 @@ export default function Whiteboard({ socket, connected, sessionId, darkMode }) {
           🗑 Clear
         </button>
       </div>
+
+      {imageWarning && (
+        <div className="image-warning-banner">
+          {imageWarning}
+          <button onClick={() => setImageWarning(null)} title="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="excalidraw-container">
         <Excalidraw
