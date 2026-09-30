@@ -5,7 +5,6 @@ shape tools, image and arrow-binding support (via Excalidraw), live cursors,
 presence, persistent chat (MongoDB), and voice-to-text transcription
 (OpenAI Whisper) — with full JWT-based authentication and dark mode.
 
-Built to satisfy the PRD/TRD/App-Flow/Implementation-Flow docs for this project:
 - React (Vite) frontend, whiteboard powered by [Excalidraw](https://github.com/excalidraw/excalidraw) (MIT licensed)
 - Node.js + Express + Socket.IO backend
 - MongoDB for persistent chat + session metadata (including whiteboard scene snapshots)
@@ -94,26 +93,6 @@ docker compose up --build
 - MongoDB: localhost:27017 (containerized, persisted via the `mongo-data` volume)
 
 To stop: `docker compose down` (add `-v` to also wipe the MongoDB volume).
-
-## Environment variables
-
-### Backend (`backend/.env`)
-| Variable | Description |
-|---|---|
-| `PORT` | HTTP port (default 5000) |
-| `CLIENT_ORIGIN` | Allowed CORS origin for the frontend |
-| `MONGODB_URI` | MongoDB connection string |
-| `JWT_SECRET` | Secret used to sign auth tokens — **change in production** |
-| `JWT_EXPIRES_IN` | Token lifetime (e.g. `7d`) |
-| `COOKIE_NAME` | Name of the httpOnly auth cookie |
-| `OPENAI_API_KEY` | Required for voice transcription; never sent to the browser |
-| `MAX_AUDIO_SIZE_MB` | Max upload size for recorded audio |
-
-### Frontend (`frontend/.env`)
-| Variable | Description |
-|---|---|
-| `VITE_API_BASE_URL` | Base URL for REST calls, e.g. `http://localhost:5000/api` |
-| `VITE_SOCKET_URL` | Base URL for the Socket.IO connection |
 
 ## Key architectural notes
 
