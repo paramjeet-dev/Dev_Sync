@@ -7,7 +7,7 @@ async function connectDB() {
   try {
     await mongoose.connect(config.mongodbUri);
     // eslint-disable-next-line no-console
-    console.log(`[db] Connected to MongoDB at ${maskUri(config.mongodbUri)}`);
+    console.log(`[db] Connected to MongoDB.`);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[db] MongoDB connection failed:', err.message);
@@ -25,9 +25,5 @@ async function connectDB() {
   });
 }
 
-function maskUri(uri) {
-  // Hides credentials in logs if present: mongodb://user:pass@host
-  return uri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@');
-}
 
 module.exports = connectDB;
