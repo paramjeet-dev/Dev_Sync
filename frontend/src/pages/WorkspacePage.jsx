@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../context/AuthContext';
@@ -6,7 +7,6 @@ import Whiteboard from '../components/Canvas/Whiteboard';
 import PresenceList from '../components/Presence/PresenceList';
 import ChatPanel from '../components/Chat/ChatPanel';
 import TranscriptionControl from '../components/Transcription/TranscriptionControl';
-import { useState } from 'react';
 
 export default function WorkspacePage() {
   const { sessionId } = useParams();
@@ -16,6 +16,19 @@ export default function WorkspacePage() {
   const [rightTab, setRightTab] = useState('chat'); // 'chat' | 'voice'
 
   const { socket, connected, joinError, participants, selfSocketId } = useSocket(sessionId);
+
+  // If the creator deletes this board while we're in it, send everyone back to the lobby.
+  useEffect(() => {
+    if (!socket) return undefined;
+    function handleDeleted({ sessionId: deletedId }) {
+      if (deletedId === sessionId) {
+        window.alert('This board was deleted by its creator.');
+        navigate('/lobby');
+      }
+    }
+    socket.on('session:deleted', handleDeleted);
+    return () => socket.off('session:deleted', handleDeleted);
+  }, [socket, sessionId, navigate]);
 
   function handleLeave() {
     navigate('/lobby');
@@ -53,26 +66,15 @@ export default function WorkspacePage() {
 
       <div className="workspace-body">
         <div className="workspace-main">
-          <Whiteboard
-            socket={socket}
-            connected={connected}
-            sessionId={sessionId}
-            darkMode={darkMode}
-          />
+          <Whiteboard socket={socket} connected={connected} sessionId={sessionId} darkMode={darkMode} />
         </div>
 
         <aside className="workspace-sidebar">
           <div className="sidebar-tabs">
-            <button
-              className={rightTab === 'chat' ? 'active' : ''}
-              onClick={() => setRightTab('chat')}
-            >
+            <button className={rightTab === 'chat' ? 'active' : ''} onClick={() => setRightTab('chat')}>
               Chat
             </button>
-            <button
-              className={rightTab === 'voice' ? 'active' : ''}
-              onClick={() => setRightTab('voice')}
-            >
+            <button className={rightTab === 'voice' ? 'active' : ''} onClick={() => setRightTab('voice')}>
               Voice
             </button>
           </div>

@@ -4,9 +4,8 @@ const DEFAULT_PAGE_SIZE = 30;
 const MAX_PAGE_SIZE = 100;
 
 /**
- * Persist a new chat message. This is the single write path used by both
- * the HTTP route (fallback/testing) and the Socket.IO chat handler, so the
- * database is always the source of truth before anything is broadcast.
+ * Persist a new chat message. Single write path used by both the HTTP route
+ * and the Socket.IO handler, so the DB is the source of truth before broadcast.
  */
 async function createMessage({ sessionId, userId, username, message, metadata = {} }) {
   const trimmed = (message || '').trim();
@@ -26,21 +25,13 @@ async function createMessage({ sessionId, userId, username, message, metadata = 
     throw err;
   }
 
-  const doc = await ChatMessage.create({
-    sessionId,
-    userId,
-    username,
-    message: trimmed,
-    metadata,
-  });
-
+  const doc = await ChatMessage.create({ sessionId, userId, username, message: trimmed, metadata });
   return doc.toPublicJSON();
 }
 
 /**
- * Cursor-based pagination using createdAt + _id as the cursor, sorted newest-first.
- * `before` is an ISO timestamp (or message id) marking the oldest message the
- * client has already seen; omit it to fetch the most recent page.
+ * Cursor-based pagination using createdAt, newest-first.
+ * `before` is an ISO timestamp marking the oldest message already seen.
  */
 async function getMessagePage({ sessionId, before, limit }) {
   if (!sessionId) {
@@ -59,7 +50,7 @@ async function getMessagePage({ sessionId, before, limit }) {
     }
   }
 
-  // Fetch pageSize + 1 to know if there's another older page available.
+  // Fetch pageSize + 1 to know if there's another older page.
   const docs = await ChatMessage.find(query)
     .sort({ createdAt: -1, _id: -1 })
     .limit(pageSize + 1)
@@ -76,14 +67,13 @@ async function getMessagePage({ sessionId, before, limit }) {
     createdAt: doc.createdAt,
   }));
 
-  // Return in chronological (oldest-first) order for easy rendering/prepending.
   const chronological = page.reverse();
 
   return {
     messages: chronological,
     pagination: {
       hasMore,
-      nextCursor: hasMore ? page[page.length - 1].createdAt : null,
+      nextCursor: hasMore ? chronological[0].createdAt : null,
       pageSize,
     },
   };

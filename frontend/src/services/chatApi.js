@@ -17,6 +17,18 @@ export async function fetchSession(sessionId) {
   return data.session;
 }
 
+export async function fetchMySessions() {
+  const { data } = await api.get('/sessions');
+  return data.sessions;
+}
+
+// Creator: deletes the board for everyone. Others: removes it from their list.
+// Resolves to 'deleted' | 'removed'.
+export async function deleteSession(sessionId) {
+  const { data } = await api.delete(`/sessions/${sessionId}`);
+  return data.result;
+}
+
 export async function fetchSnapshot(sessionId) {
   const { data } = await api.get(`/sessions/${sessionId}/snapshot`);
   return data.snapshot;

@@ -6,11 +6,8 @@ import RemoteCursors from '../RemoteCursors/RemoteCursors';
 import { fetchSnapshot } from '../../services/chatApi';
 
 /**
- * Thin wrapper around Excalidraw. Excalidraw itself provides the infinite
- * canvas, zoom/pan, shape tools, hand-drawn rendering, arrow-binding,
- * image support, shape libraries, and PNG/SVG/clipboard export — all of
- * which are out of scope to reimplement (see project discussion). This
- * component's job is strictly the realtime + persistence integration.
+ * Thin wrapper around Excalidraw. This component's job is strictly the
+ * realtime + persistence integration.
  */
 export default function Whiteboard({ socket, connected, sessionId, darkMode }) {
   const [excalidrawAPI, setExcalidrawAPI] = useState(null);
@@ -93,9 +90,7 @@ export default function Whiteboard({ socket, connected, sessionId, darkMode }) {
     try {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     } catch (err) {
-      // Clipboard API may be unavailable (permissions/browser support) —
-      // fail silently rather than surfacing a confusing error for a
-      // non-critical convenience feature.
+      // Clipboard API may be unavailable — fail silently for a non-critical feature.
     }
   }, [excalidrawAPI]);
 

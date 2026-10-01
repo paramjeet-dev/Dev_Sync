@@ -14,11 +14,7 @@ async function signup(req, res, next) {
     const { username, email, password } = req.body;
     const { user, token } = await registerUser({ username, email, password });
     res.cookie(config.cookieName, token, COOKIE_OPTIONS);
-    // The token is intentionally not included in the response body — it
-    // lives only in the httpOnly cookie, unreadable by client-side JS. See
-    // services/socket.js and sockets/socketAuth.js for how the Socket.IO
-    // handshake authenticates from the same cookie instead of a token the
-    // frontend would otherwise have to hold in memory/localStorage.
+    // Token is intentionally not in the body — it lives only in the httpOnly cookie.
     res.status(201).json({ user: user.toPublicJSON() });
   } catch (err) {
     if (err instanceof AuthError) {
@@ -43,9 +39,7 @@ async function login(req, res, next) {
 }
 
 function logout(req, res) {
-  // clearCookie must be called with the same path/sameSite/secure
-  // attributes the cookie was originally set with, or some browsers will
-  // silently keep the old cookie around instead of clearing it.
+  // clearCookie must use the same attributes the cookie was set with.
   res.clearCookie(config.cookieName, {
     httpOnly: true,
     sameSite: COOKIE_OPTIONS.sameSite,

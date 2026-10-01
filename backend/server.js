@@ -8,7 +8,8 @@ async function start() {
   await connectDB();
 
   const httpServer = http.createServer(app);
-  initSocketServer(httpServer);
+  const io = initSocketServer(httpServer);
+  app.set('io', io); // lets REST controllers notify connected sockets (e.g. board deleted)
 
   httpServer.listen(config.port, () => {
     // eslint-disable-next-line no-console

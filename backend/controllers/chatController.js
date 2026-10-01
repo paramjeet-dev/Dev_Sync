@@ -11,7 +11,7 @@ async function getHistory(req, res, next) {
   }
 }
 
-// HTTP fallback for sending a message (primary path is Socket.IO; see sockets/chatHandlers.js).
+// HTTP fallback for sending a message (primary path is Socket.IO).
 async function postMessage(req, res, next) {
   try {
     const { sessionId } = req.params;

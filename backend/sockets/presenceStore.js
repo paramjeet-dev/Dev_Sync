@@ -1,10 +1,6 @@
 /**
  * In-memory presence tracking, keyed by sessionId -> Map<socketId, participant>.
- * This is intentionally NOT persisted to MongoDB — presence/cursor data is
- * transient per PRD section 5.2/5.3 and TRD section 5.
- *
- * For multi-instance/horizontal scaling, this store would need to be backed
- * by Redis (e.g. via socket.io-redis adapter) instead of process memory.
+ * Intentionally NOT persisted. For horizontal scaling this would move to Redis.
  */
 
 const sessions = new Map(); // sessionId -> Map<socketId, participant>

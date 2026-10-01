@@ -1,8 +1,6 @@
 /**
- * The scribble is a small set of hand-drawn-style SVG strokes — a nod to
- * the whiteboard itself being the product, rather than generic decoration.
- * Kept deliberately understated (low opacity, monochrome) so it reads as
- * texture, not a competing focal point — the form is still the job here.
+ * The scribble is a small set of hand-drawn-style SVG strokes — a nod to the
+ * whiteboard being the product. Kept understated so the form stays the focus.
  */
 function Scribble() {
   return (

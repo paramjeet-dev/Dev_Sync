@@ -4,8 +4,7 @@ import { useAuth } from '../context/AuthContext';
 
 /**
  * Establishes the Socket.IO connection and joins the given collaboration
- * session. Returns the socket ref, connection status, and current
- * participant list from the join acknowledgement.
+ * session. Returns the socket, connection status, and participant list.
  */
 export function useSocket(sessionId) {
   const { isAuthenticated } = useAuth();
@@ -18,8 +17,6 @@ export function useSocket(sessionId) {
   useEffect(() => {
     if (!isAuthenticated || !sessionId) return undefined;
 
-    // Authenticates via the httpOnly cookie (see services/socket.js) —
-    // nothing token-related to pass or refresh here.
     const socket = getSocket();
     socketRef.current = socket;
 

@@ -5,14 +5,9 @@ import { disconnectSocket } from '../services/socket';
 const AuthContext = createContext(null);
 
 /**
- * Auth state is derived entirely from the httpOnly cookie the backend sets
- * on signup/login — there is no token held in React state, localStorage,
- * or anywhere else client-side JS can read it. "Am I logged in" is
- * answered by asking the backend (GET /api/auth/me, which succeeds only if
- * the cookie is present and valid), not by inspecting a stored credential.
- * This does mean a page load always costs one /me round-trip before we
- * know the auth state — an accepted tradeoff for not exposing the token to
- * any script-injection surface.
+ * Auth state is derived entirely from the httpOnly cookie the backend sets on
+ * signup/login — no token is held in React state or localStorage. "Am I logged
+ * in" is answered by GET /api/auth/me.
  */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);

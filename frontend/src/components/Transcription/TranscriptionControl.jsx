@@ -18,7 +18,8 @@ export default function TranscriptionControl({ socket, connected }) {
         const result = await transcribeAudio(blob);
         setTranscript(result.text || '');
       } catch (err) {
-        setError(err.response?.data?.error || err.message || 'Transcription failed.');
+        // Show only the server's sanitized message — never axios/provider internals.
+        setError(err.response?.data?.error || 'Transcription failed. Please try again.');
       } finally {
         setProcessing(false);
       }
@@ -40,11 +41,7 @@ export default function TranscriptionControl({ socket, connected }) {
     });
   }
 
-  const statusLabel = recording
-    ? 'Recording… click to stop'
-    : processing
-    ? 'Processing…'
-    : 'Click to record';
+  const statusLabel = recording ? 'Recording… click to stop' : processing ? 'Processing…' : 'Click to record';
 
   return (
     <div className="transcription-panel">
@@ -59,17 +56,11 @@ export default function TranscriptionControl({ socket, connected }) {
       </button>
       <div className="transcription-status">{statusLabel}</div>
 
-      {(recorderError || error) && (
-        <div className="transcription-error">{recorderError || error}</div>
-      )}
+      {(recorderError || error) && <div className="transcription-error">{recorderError || error}</div>}
 
       {transcript && (
         <div className="transcription-result">
-          <textarea
-            value={transcript}
-            onChange={(e) => setTranscript(e.target.value)}
-            rows={3}
-          />
+          <textarea value={transcript} onChange={(e) => setTranscript(e.target.value)} rows={3} />
           <button onClick={insertIntoChat} disabled={!connected}>
             Send to chat
           </button>

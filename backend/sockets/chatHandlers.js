@@ -8,9 +8,7 @@ function registerChatHandlers(io, socket) {
     }
 
     try {
-      // Persist the canonical message before broadcasting (IMPLEMENTATION_FLOW.md
-      // Phase 8: "Persisting the canonical message before broadcast provides a
-      // clear source of truth").
+      // Persist the canonical message before broadcasting.
       const saved = await createMessage({
         sessionId,
         userId: socket.user.id,
@@ -21,7 +19,13 @@ function registerChatHandlers(io, socket) {
       ack?.({ ok: true, message: saved });
       io.to(sessionId).emit('chat:message', saved);
     } catch (err) {
-      ack?.({ ok: false, error: err.message || 'Failed to send message.' });
+      // Only validation errors (4xx) are safe to show; everything else is logged, not leaked.
+      const safe = err.statusCode && err.statusCode < 500 ? err.message : null;
+      if (!safe) {
+        // eslint-disable-next-line no-console
+        console.error('[chat] send failed:', err);
+      }
+      ack?.({ ok: false, error: safe || 'Failed to send message.' });
     }
   });
 }

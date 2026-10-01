@@ -1,22 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 const BROADCAST_DEBOUNCE_MS = 80;
-const SNAPSHOT_SAVE_INTERVAL_MS = 15000;
+// Snapshots are what a returning user sees days later; save often so little is lost on leave.
+const SNAPSHOT_SAVE_INTERVAL_MS = 5000;
 
-// Mirrors the backend's audio upload posture (see backend/middleware/
-// uploadAudio.js) — apply the same "validate before it enters the system"
-// discipline to whiteboard images. Excalidraw itself imposes no size limit
-// on pasted/dropped images, and nothing was checking this before: a large
-// image got embedded as a base64 dataURL and then re-sent on every scene
-// broadcast (see the file-diffing fix below), persisted into MongoDB, and
-// counted against the 10MB Socket.IO payload ceiling and MongoDB's 16MB
-// per-document limit — all without ever having been validated.
+// Mirrors the backend's validation (backend/services/sessionService.js).
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB per image
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']);
 
-// A dataURL's base64 payload is ~4/3 the size of the decoded bytes; this is
-// an estimate (no padding correction) but well within the margin needed to
-// catch obviously-oversized images without decoding the whole string.
 function estimateDecodedBytes(dataURL) {
   const commaIndex = dataURL.indexOf(',');
   const base64Length = commaIndex === -1 ? dataURL.length : dataURL.length - commaIndex - 1;
@@ -32,27 +23,15 @@ function isAcceptableImageFile(file) {
 
 /**
  * Bridges an Excalidraw instance to the Socket.IO `scene:*` events.
- *
- * Sync strategy (mirrors Excalidraw's own reference collaboration approach):
- * - Every scene change fires `onChange(elements, appState, files)`.
- * - We diff against the last-broadcast version per element id and only
- *   send elements that are new or whose `version` increased — not the
- *   whole scene — to keep payloads small on a busy board.
- * - Files (images) are diffed the same way, by fileId, so an embedded
- *   image is only ever broadcast once — not re-sent on every subsequent
- *   scene change for the rest of the session.
- * - Incoming remote batches are merged element-by-element, keeping
- *   whichever copy has the higher `version`. This is a simple
- *   last-writer-wins-per-element model: fine for shape edits where a
- *   whole element is replaced atomically, not a true CRDT, so two users
- *   editing the exact same shape at the same instant may still have one
- *   edit silently overwrite the other. Acceptable for this app's scale;
- *   called out explicitly rather than left implicit.
+ * - onChange is diffed against the last-broadcast version per element id; only changed elements are sent.
+ * - Files (images) are diffed by fileId so each is broadcast once.
+ * - Incoming batches merge element-by-element keeping the higher `version`
+ *   (last-writer-wins per element; not a CRDT).
  */
 export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
-  const lastVersionsRef = useRef(new Map()); // elementId -> last broadcast version
-  const sentFileIdsRef = useRef(new Set()); // fileIds already broadcast this session
-  const applyingRemoteRef = useRef(false); // guards against re-broadcasting remote-applied changes
+  const lastVersionsRef = useRef(new Map());
+  const sentFileIdsRef = useRef(new Set());
+  const applyingRemoteRef = useRef(false);
   const debounceTimerRef = useRef(null);
   const pendingFilesRef = useRef({});
   const onRejectedFileRef = useRef(null);
@@ -68,10 +47,8 @@ export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
 
       const newFiles = {};
       Object.values(files || {}).forEach((file) => {
-        if (sentFileIdsRef.current.has(file.id)) return; // already broadcast — see class comment
+        if (sentFileIdsRef.current.has(file.id)) return;
         if (!isAcceptableImageFile(file)) {
-          // Mark as "handled" so we don't keep re-evaluating (and
-          // re-notifying about) the same rejected file on every change.
           sentFileIdsRef.current.add(file.id);
           onRejectedFileRef.current?.(file);
           return;
@@ -91,7 +68,7 @@ export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
 
   const handleChange = useCallback(
     (elements, appState, files) => {
-      if (applyingRemoteRef.current) return; // this change came from a remote merge, don't echo it back
+      if (applyingRemoteRef.current) return;
 
       pendingFilesRef.current = files;
 
@@ -103,12 +80,10 @@ export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
     [broadcastNow]
   );
 
-  /** Registers a callback fired when a locally-added image is rejected (too large/wrong type). */
   const setOnRejectedFile = useCallback((cb) => {
     onRejectedFileRef.current = cb;
   }, []);
 
-  // Apply an incoming remote scene update by merging into the local scene.
   useEffect(() => {
     if (!socket || !excalidrawAPI) return undefined;
 
@@ -136,8 +111,6 @@ export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
           excalidrawAPI.addFiles(Object.values(files));
         }
       } finally {
-        // Release on next tick so Excalidraw's own onChange for this
-        // programmatic update fires and is correctly suppressed.
         setTimeout(() => {
           applyingRemoteRef.current = false;
         }, 0);
@@ -166,16 +139,8 @@ export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
     };
   }, [socket, excalidrawAPI]);
 
-  // Periodic snapshot persistence so a reconnecting/late-joining client can
-  // restore the board (server merges by version — see backend sessionService).
-  // Uses getSceneElementsIncludingDeleted, not getSceneElements: Excalidraw
-  // represents a deletion as the same element with isDeleted:true and a
-  // bumped version, not by removal from the array. getSceneElements()
-  // filters those out, so persisting from it would mean a deleted shape's
-  // last *visible* version stays in MongoDB forever and reappears the next
-  // time anyone restores the snapshot. Sending the tombstoned element
-  // itself is what lets the version-merge on the backend correctly record
-  // the deletion.
+  // Periodic snapshot persistence. Uses getSceneElementsIncludingDeleted so
+  // deletions (tombstones) are persisted too and don't reappear on restore.
   useEffect(() => {
     if (!socket || !connected || !excalidrawAPI) return undefined;
 
@@ -207,10 +172,6 @@ export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
         elements.forEach((el) => lastVersionsRef.current.set(el.id, el.version));
         if (files && Object.keys(files).length > 0) {
           excalidrawAPI.addFiles(Object.values(files));
-          // These came from the persisted snapshot (already validated
-          // before they were ever stored — see backend sessionController),
-          // so mark them sent to avoid immediately re-broadcasting the
-          // whole restored image set on the next local scene change.
           Object.keys(files).forEach((fileId) => sentFileIdsRef.current.add(fileId));
         }
       } finally {

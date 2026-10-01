@@ -1,8 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createSession, fetchSession } from '../services/chatApi';
+import { createSession, fetchSession, fetchMySessions, deleteSession } from '../services/chatApi';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+
+function timeAgo(date) {
+  const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
 
 export default function LobbyPage() {
   const { user, logout } = useAuth();
@@ -13,6 +21,16 @@ export default function LobbyPage() {
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [boards, setBoards] = useState([]);
+  const [boardsLoading, setBoardsLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+
+  useEffect(() => {
+    fetchMySessions()
+      .then(setBoards)
+      .catch(() => setBoards([]))
+      .finally(() => setBoardsLoading(false));
+  }, []);
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -44,6 +62,25 @@ export default function LobbyPage() {
     }
   }
 
+  async function handleDelete(board) {
+    const isOwner = board.createdBy === user?.id;
+    const message = isOwner
+      ? `Permanently delete "${board.name}"? This removes the board and its chat for everyone, and can't be undone.`
+      : `Remove "${board.name}" from your list? You can rejoin later with the room code (${board.sessionId}).`;
+    if (!window.confirm(message)) return;
+
+    setError(null);
+    setDeletingId(board.sessionId);
+    try {
+      await deleteSession(board.sessionId);
+      setBoards((prev) => prev.filter((b) => b.sessionId !== board.sessionId));
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not delete that board. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   async function handleLogout() {
     await logout();
     navigate('/login');
@@ -66,7 +103,7 @@ export default function LobbyPage() {
 
       <main className="lobby-main">
         <div className="lobby-hero">
-          <h1>Where's the board?</h1>
+          <h1>Where&apos;s the board?</h1>
           <p>Start a fresh session, or drop in on one your team already has open.</p>
         </div>
 
@@ -108,6 +145,39 @@ export default function LobbyPage() {
         )}
 
         {error && <div className="auth-error">{error}</div>}
+
+        <section className="board-history">
+          <h2>Your boards</h2>
+          {boardsLoading && <p className="board-history-empty">Loading…</p>}
+          {!boardsLoading && boards.length === 0 && (
+            <p className="board-history-empty">Boards you create or join will show up here.</p>
+          )}
+          <div className="board-grid">
+            {boards.map((b) => {
+              const isOwner = b.createdBy === user?.id;
+              return (
+                <div key={b.sessionId} className="board-card">
+                  <button className="board-card-open" onClick={() => navigate(`/workspace/${b.sessionId}`)}>
+                    <span className="board-card-name">{b.name}</span>
+                    <span className="board-card-meta">
+                      <code>{b.sessionId}</code> · {b.elementCount} objects
+                    </span>
+                    <span className="board-card-meta">Opened {timeAgo(b.lastActivityAt)}</span>
+                  </button>
+                  <button
+                    className="board-card-delete danger"
+                    onClick={() => handleDelete(b)}
+                    disabled={deletingId === b.sessionId}
+                    title={isOwner ? 'Delete this board for everyone' : 'Remove from my list'}
+                    aria-label={isOwner ? `Delete board ${b.name}` : `Remove board ${b.name} from my list`}
+                  >
+                    {deletingId === b.sessionId ? '…' : isOwner ? '🗑 Delete' : 'Remove'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       </main>
     </div>
   );

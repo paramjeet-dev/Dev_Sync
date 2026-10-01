@@ -20,7 +20,8 @@ const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   cookieName: process.env.COOKIE_NAME || 'dev_sync_token',
 
-  openaiApiKey: process.env.OPENAI_API_KEY || '',
+  // Placeholder values copied from .env.example are treated as "not configured".
+  openaiApiKey: /^sk-your/.test(process.env.OPENAI_API_KEY || '') ? '' : process.env.OPENAI_API_KEY || '',
 
   maxAudioSizeMb: parseInt(process.env.MAX_AUDIO_SIZE_MB || '25', 10),
 };

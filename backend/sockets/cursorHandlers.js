@@ -1,8 +1,8 @@
 const presenceStore = require('./presenceStore');
 
-// Server-side throttle as a safety net in addition to client-side throttling
-// (TRD section 15: "Consider throttling cursor movement").
-const CURSOR_BROADCAST_INTERVAL_MS = 40; // ~25 updates/sec max per socket
+// Server-side throttle is only a safety net (clients already throttle at 40ms).
+// Kept looser than the client so timing jitter doesn't drop events.
+const CURSOR_BROADCAST_INTERVAL_MS = 15;
 
 function registerCursorHandlers(io, socket) {
   let lastBroadcast = 0;

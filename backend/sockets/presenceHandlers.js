@@ -1,8 +1,8 @@
 const presenceStore = require('./presenceStore');
-const { touchSession, getSessionBySessionId } = require('../services/sessionService');
+const { touchSession, addMember, getSessionBySessionId } = require('../services/sessionService');
 
 function registerPresenceHandlers(io, socket) {
-  socket.on('session:join', async ({ sessionId }, ack) => {
+  socket.on('session:join', async ({ sessionId } = {}, ack) => {
     try {
       if (!sessionId || typeof sessionId !== 'string') {
         return ack?.({ ok: false, error: 'A valid sessionId is required.' });
@@ -13,7 +13,6 @@ function registerPresenceHandlers(io, socket) {
         return ack?.({ ok: false, error: 'Session does not exist.' });
       }
 
-      // A socket only ever belongs to one collaboration room at a time.
       socket.join(sessionId);
       socket.data.sessionId = sessionId;
 
@@ -24,7 +23,6 @@ function registerPresenceHandlers(io, socket) {
 
       const participants = presenceStore.getParticipants(sessionId);
 
-      // Confirm join state directly to the joining client...
       ack?.({
         ok: true,
         sessionId,
@@ -32,10 +30,10 @@ function registerPresenceHandlers(io, socket) {
         participants,
       });
 
-      // ...and broadcast the updated presence list to everyone else in the room.
       socket.to(sessionId).emit('presence:update', { participants });
 
-      await touchSession(sessionId);
+      // Bump activity and record membership so the board shows in "Your boards".
+      await Promise.all([touchSession(sessionId), addMember(sessionId, socket.user.id)]);
     } catch (err) {
       ack?.({ ok: false, error: 'Failed to join session.' });
     }

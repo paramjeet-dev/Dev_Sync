@@ -26,7 +26,10 @@ const storage = multer.diskStorage({
 
 function fileFilter(req, file, cb) {
   if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-    return cb(new Error(`Unsupported audio type: ${file.mimetype}`));
+    const err = new Error('Unsupported audio type.');
+    err.statusCode = 400;
+    err.publicMessage = 'Unsupported audio format.';
+    return cb(err);
   }
   cb(null, true);
 }
