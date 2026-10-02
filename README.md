@@ -41,18 +41,6 @@ cd frontend && cp .env.example .env && npm install && npm run dev
 Test collaboration with two **different** users in separate browser profiles (or one in incognito) —
 tabs in the same profile share the auth cookie and so are the same user.
 
-## API additions
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/sessions/:sessionId/join` | Join with the room code (grants membership) |
-| GET | `/api/sessions` | Boards you created/joined (no canvas payload) |
-| PATCH | `/api/sessions/:sessionId` | Rename a board (creator only) |
-| PUT | `/api/sessions/:sessionId/thumbnail` | Save the board's small preview image (members only) |
-| DELETE | `/api/sessions/:sessionId` | Creator: delete for everyone. Others: remove from own list |
-
-Socket event `session:deleted` is emitted to a board's room when its creator deletes it.
-
 ## Access control & persistence
 
 - **The room code is the invite.** Joining a board (`POST /api/sessions/:id/join`, done automatically when you open
@@ -82,7 +70,4 @@ Socket event `session:deleted` is emitted to a board's room when its creator del
 - Undo/redo is per-client (Excalidraw's local history), not collaborative.
 - Per-element last-writer-wins, not a CRDT.
 - Presence lives in one process's memory; scaling horizontally needs a shared store (e.g. Redis).
-- Deleted-element tombstones and images are kept forever; there is no per-board size cap or pruning yet.
 - Boards created before the `members` field existed show only for their creator until others rejoin.
-
-Design docs are in `docs/`.
