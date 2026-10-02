@@ -1,37 +1,49 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchChatHistory } from '../../services/chatApi';
+import { getErrorMessage } from '../../services/errors';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+
+const SEND_TIMEOUT_MS = 8000;
+
+// A live message can also be present in a history page that was fetched around the same time.
+function mergeById(existing, incoming) {
+  const seen = new Set(existing.map((m) => m.id));
+  return [...existing, ...incoming.filter((m) => !seen.has(m.id))];
+}
 
 export default function ChatPanel({ socket, sessionId, connected }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [messages, setMessages] = useState([]);
   const [pagination, setPagination] = useState({ hasMore: false, nextCursor: null });
   const [draft, setDraft] = useState('');
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [historyError, setHistoryError] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [sendError, setSendError] = useState(null);
   const scrollRef = useRef(null);
   const shouldStickToBottom = useRef(true);
 
-  // Initial page load.
-  useEffect(() => {
-    let cancelled = false;
-    async function loadInitial() {
-      setLoadingHistory(true);
-      try {
-        const { messages: initial, pagination: pageInfo } = await fetchChatHistory(sessionId);
-        if (cancelled) return;
-        setMessages(initial);
-        setPagination(pageInfo);
-      } finally {
-        if (!cancelled) setLoadingHistory(false);
-      }
+  const loadInitial = useCallback(async () => {
+    setLoadingHistory(true);
+    setHistoryError(null);
+    try {
+      const { messages: initial, pagination: pageInfo } = await fetchChatHistory(sessionId);
+      // Keep anything that arrived live while the request was in flight.
+      setMessages((live) => mergeById(initial, live));
+      setPagination(pageInfo);
+    } catch (err) {
+      setHistoryError(getErrorMessage(err, "Couldn't load the chat history."));
+    } finally {
+      setLoadingHistory(false);
     }
-    loadInitial();
-    return () => {
-      cancelled = true;
-    };
   }, [sessionId]);
+
+  useEffect(() => {
+    setMessages([]);
+    loadInitial();
+  }, [loadInitial]);
 
   // Scroll to bottom on new messages (only if user was already at bottom).
   useEffect(() => {
@@ -44,7 +56,7 @@ export default function ChatPanel({ socket, sessionId, connected }) {
   useEffect(() => {
     if (!socket) return undefined;
     function handleIncoming(message) {
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => mergeById(prev, [message]));
     }
     socket.on('chat:message', handleIncoming);
     return () => socket.off('chat:message', handleIncoming);
@@ -58,12 +70,14 @@ export default function ChatPanel({ socket, sessionId, connected }) {
       const { messages: older, pagination: pageInfo } = await fetchChatHistory(sessionId, {
         before: pagination.nextCursor,
       });
-      setMessages((prev) => [...older, ...prev]);
+      setMessages((prev) => mergeById(older, prev));
       setPagination(pageInfo);
+    } catch (err) {
+      toast(getErrorMessage(err, "Couldn't load older messages."), { type: 'error' });
     } finally {
       setLoadingMore(false);
     }
-  }, [sessionId, pagination, loadingMore]);
+  }, [sessionId, pagination, loadingMore, toast]);
 
   function handleScroll(e) {
     const el = e.target;
@@ -79,9 +93,12 @@ export default function ChatPanel({ socket, sessionId, connected }) {
     if (!trimmed || !socket || !connected) return;
 
     setSendError(null);
-    socket.emit('chat:send', { message: trimmed }, (response) => {
-      if (!response?.ok) {
-        setSendError(response?.error || 'Failed to send message.');
+    // timeout(): if the server never answers (dropped connection), the callback still fires with an
+    // error instead of the message silently vanishing.
+    socket.timeout(SEND_TIMEOUT_MS).emit('chat:send', { message: trimmed }, (err, response) => {
+      if (err || !response?.ok) {
+        setSendError(err ? "Message not sent — couldn't reach the server." : response?.error || 'Failed to send message.');
+        setDraft((current) => current || trimmed); // give the text back so nothing is lost
       }
     });
     setDraft('');
@@ -94,10 +111,19 @@ export default function ChatPanel({ socket, sessionId, connected }) {
 
       <div className="chat-messages" ref={scrollRef} onScroll={handleScroll}>
         {loadingHistory && <div className="chat-loading">Loading messages…</div>}
+        {historyError && (
+          <div className="chat-history-error">
+            <span>{historyError}</span>
+            <button onClick={loadInitial}>Retry</button>
+          </div>
+        )}
         {!loadingHistory && pagination.hasMore && (
           <button className="load-older-btn" onClick={loadOlder} disabled={loadingMore}>
             {loadingMore ? 'Loading…' : 'Load older messages'}
           </button>
+        )}
+        {!loadingHistory && !historyError && messages.length === 0 && (
+          <div className="chat-loading">No messages yet. Say hello 👋</div>
         )}
         {messages.map((msg) => (
           <div

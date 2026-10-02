@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import AuthLayout from './AuthLayout';
+import { getErrorMessage } from '../../services/errors';
 
 export default function SignupForm() {
   const { signup } = useAuth();
@@ -20,7 +21,7 @@ export default function SignupForm() {
       await signup({ username, email, password });
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.error || 'Signup failed.');
+      setError(getErrorMessage(err, 'Signup failed.'));
     } finally {
       setSubmitting(false);
     }

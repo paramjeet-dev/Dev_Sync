@@ -3,9 +3,17 @@ const app = require('./app');
 const config = require('./config/env');
 const connectDB = require('./config/db');
 const initSocketServer = require('./sockets');
+const { migrateLegacyScenes } = require('./services/sceneService');
 
 async function start() {
   await connectDB();
+
+  try {
+    await migrateLegacyScenes(); // one-time, idempotent: moves old inline scenes to per-element storage
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[migrate] Legacy scene migration failed (will retry on next start):', err);
+  }
 
   const httpServer = http.createServer(app);
   const io = initSocketServer(httpServer);

@@ -22,6 +22,8 @@ async function postMessage(req, res, next) {
       username: req.user.username,
       message,
     });
+    // Same behaviour as the socket path: persisted first, then broadcast to the room.
+    req.app.get('io')?.to(sessionId).emit('chat:message', doc);
     res.status(201).json({ message: doc });
   } catch (err) {
     next(err);

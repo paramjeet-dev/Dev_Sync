@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
+import { joinSession } from '../services/chatApi';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
+import { getErrorMessage } from '../services/errors';
 import Whiteboard from '../components/Canvas/Whiteboard';
 import PresenceList from '../components/Presence/PresenceList';
 import ChatPanel from '../components/Chat/ChatPanel';
@@ -13,22 +16,46 @@ export default function WorkspacePage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
+  const { toast } = useToast();
   const [rightTab, setRightTab] = useState('chat'); // 'chat' | 'voice'
 
-  const { socket, connected, joinError, participants, selfSocketId } = useSocket(sessionId);
+  // Access is granted by joining over HTTP with the room code. Nothing else (socket, chat, snapshot)
+  // starts until that succeeds, because the server rejects non-members everywhere.
+  const [access, setAccess] = useState({ status: 'checking', error: null }); // 'checking' | 'ok' | 'denied'
+
+  useEffect(() => {
+    let cancelled = false;
+    setAccess({ status: 'checking', error: null });
+    joinSession(sessionId)
+      .then(() => !cancelled && setAccess({ status: 'ok', error: null }))
+      .catch((err) => {
+        if (cancelled) return;
+        setAccess({
+          status: 'denied',
+          error: getErrorMessage(err, 'Could not open this board. Please try again.'),
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  const { socket, connected, joined, joinError, participants, selfSocketId } = useSocket(
+    access.status === 'ok' ? sessionId : null
+  );
 
   // If the creator deletes this board while we're in it, send everyone back to the lobby.
   useEffect(() => {
     if (!socket) return undefined;
     function handleDeleted({ sessionId: deletedId }) {
       if (deletedId === sessionId) {
-        window.alert('This board was deleted by its creator.');
+        toast('This board was deleted by its creator.', { type: 'error', duration: 6000 });
         navigate('/lobby');
       }
     }
     socket.on('session:deleted', handleDeleted);
     return () => socket.off('session:deleted', handleDeleted);
-  }, [socket, sessionId, navigate]);
+  }, [socket, sessionId, navigate, toast]);
 
   function handleLeave() {
     navigate('/lobby');
@@ -37,6 +64,22 @@ export default function WorkspacePage() {
   async function handleLogout() {
     await logout();
     navigate('/login');
+  }
+
+  if (access.status === 'checking') {
+    return <div className="full-page-loading">Opening board…</div>;
+  }
+
+  if (access.status === 'denied') {
+    return (
+      <div className="lobby-state workspace-denied">
+        <h2>Can&apos;t open this board</h2>
+        <p>{access.error}</p>
+        <button className="primary" onClick={handleLeave}>
+          Back to your boards
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -66,7 +109,13 @@ export default function WorkspacePage() {
 
       <div className="workspace-body">
         <div className="workspace-main">
-          <Whiteboard socket={socket} connected={connected} sessionId={sessionId} darkMode={darkMode} />
+          <Whiteboard
+            socket={socket}
+            connected={connected}
+            joined={joined}
+            sessionId={sessionId}
+            darkMode={darkMode}
+          />
         </div>
 
         <aside className="workspace-sidebar">

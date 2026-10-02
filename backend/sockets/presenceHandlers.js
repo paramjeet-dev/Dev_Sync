@@ -1,5 +1,5 @@
 const presenceStore = require('./presenceStore');
-const { touchSession, addMember, getSessionBySessionId } = require('../services/sessionService');
+const { touchSession, isMember } = require('../services/sessionService');
 
 function registerPresenceHandlers(io, socket) {
   socket.on('session:join', async ({ sessionId } = {}, ack) => {
@@ -8,9 +8,10 @@ function registerPresenceHandlers(io, socket) {
         return ack?.({ ok: false, error: 'A valid sessionId is required.' });
       }
 
-      const session = await getSessionBySessionId(sessionId);
-      if (!session) {
-        return ack?.({ ok: false, error: 'Session does not exist.' });
+      // Membership is granted by joining over HTTP with the room code (POST /sessions/:id/join).
+      // Same message for "no such board" and "not a member" so boards can't be probed.
+      if (!(await isMember(sessionId, socket.user.id))) {
+        return ack?.({ ok: false, error: 'Board not found, or you do not have access to it.' });
       }
 
       socket.join(sessionId);
@@ -32,8 +33,7 @@ function registerPresenceHandlers(io, socket) {
 
       socket.to(sessionId).emit('presence:update', { participants });
 
-      // Bump activity and record membership so the board shows in "Your boards".
-      await Promise.all([touchSession(sessionId), addMember(sessionId, socket.user.id)]);
+      await touchSession(sessionId);
     } catch (err) {
       ack?.({ ok: false, error: 'Failed to join session.' });
     }

@@ -5,14 +5,22 @@ const STORAGE_KEY = 'dev_sync_theme';
 
 export function ThemeProvider({ children }) {
   const [darkMode, setDarkMode] = useState(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return stored === 'dark';
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) return stored === 'dark';
+    } catch (err) {
+      /* storage unavailable — fall back to the system preference */
+    }
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
   });
 
   useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
-    localStorage.setItem(STORAGE_KEY, darkMode ? 'dark' : 'light');
+    try {
+      localStorage.setItem(STORAGE_KEY, darkMode ? 'dark' : 'light');
+    } catch (err) {
+      /* non-critical */
+    }
   }, [darkMode]);
 
   const value = useMemo(

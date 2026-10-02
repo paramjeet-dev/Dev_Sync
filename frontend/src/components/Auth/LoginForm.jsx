@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import AuthLayout from './AuthLayout';
+import { getErrorMessage } from '../../services/errors';
 
 export default function LoginForm() {
-  const { login } = useAuth();
+  const { login, sessionExpired } = useAuth();
   const navigate = useNavigate();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -19,7 +20,7 @@ export default function LoginForm() {
       await login({ identifier, password });
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed.');
+      setError(getErrorMessage(err, 'Login failed.'));
     } finally {
       setSubmitting(false);
     }
@@ -33,6 +34,9 @@ export default function LoginForm() {
       <form className="auth-form" onSubmit={handleSubmit}>
         <h1>Welcome back</h1>
         <p className="auth-form-subtitle">Log in to pick up your sessions.</p>
+        {sessionExpired && !error && (
+          <div className="auth-notice">Your session expired. Please log in again.</div>
+        )}
         {error && <div className="auth-error">{error}</div>}
         <label>
           Username or email

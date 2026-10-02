@@ -1,7 +1,7 @@
 const { createMessage } = require('../services/chat/chatService');
 
 function registerChatHandlers(io, socket) {
-  socket.on('chat:send', async ({ message } = {}, ack) => {
+  socket.on('chat:send', async ({ message, metadata } = {}, ack) => {
     const sessionId = socket.data.sessionId;
     if (!sessionId) {
       return ack?.({ ok: false, error: 'You must join a session first.' });
@@ -14,6 +14,8 @@ function registerChatHandlers(io, socket) {
         userId: socket.user.id,
         username: socket.user.username,
         message,
+        // Whitelisted: clients may only tag a message as a voice transcript, nothing arbitrary.
+        metadata: metadata?.type === 'transcript' ? { type: 'transcript' } : {},
       });
 
       ack?.({ ok: true, message: saved });

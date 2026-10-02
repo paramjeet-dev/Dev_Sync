@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { transcribeAudio } from '../../services/chatApi';
+import { getErrorMessage } from '../../services/errors';
 
 export default function TranscriptionControl({ socket, connected }) {
   const { recording, error: recorderError, startRecording, stopRecording } = useAudioRecorder();
@@ -14,12 +15,18 @@ export default function TranscriptionControl({ socket, connected }) {
       setError(null);
       try {
         const blob = await stopRecording();
-        if (!blob) throw new Error('No audio captured.');
+        if (!blob || blob.size === 0) {
+          setError('No audio was captured. Please try recording again.');
+          return;
+        }
         const result = await transcribeAudio(blob);
-        setTranscript(result.text || '');
+        if (!result.text?.trim()) {
+          setError("We couldn't hear anything in that recording. Please try again.");
+          return;
+        }
+        setTranscript(result.text);
       } catch (err) {
-        // Show only the server's sanitized message — never axios/provider internals.
-        setError(err.response?.data?.error || 'Transcription failed. Please try again.');
+        setError(getErrorMessage(err, 'Transcription failed. Please try again.'));
       } finally {
         setProcessing(false);
       }
@@ -32,13 +39,16 @@ export default function TranscriptionControl({ socket, connected }) {
 
   function insertIntoChat() {
     if (!transcript.trim() || !socket || !connected) return;
-    socket.emit('chat:send', { message: transcript.trim() }, (response) => {
-      if (response?.ok) {
-        setTranscript('');
-      } else {
-        setError(response?.error || 'Failed to send transcript to chat.');
-      }
-    });
+    // metadata.type = 'transcript' makes the message render with the transcript accent in chat.
+    socket
+      .timeout(8000)
+      .emit('chat:send', { message: transcript.trim(), metadata: { type: 'transcript' } }, (err, response) => {
+        if (err || !response?.ok) {
+          setError(err ? "Couldn't reach the server. Your transcript is still here — try again." : response?.error || 'Failed to send transcript to chat.');
+        } else {
+          setTranscript('');
+        }
+      });
   }
 
   const statusLabel = recording ? 'Recording… click to stop' : processing ? 'Processing…' : 'Click to record';

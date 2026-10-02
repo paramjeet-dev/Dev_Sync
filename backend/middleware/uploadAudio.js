@@ -14,6 +14,8 @@ const ALLOWED_MIME_TYPES = new Set([
   'audio/mp4',
   'audio/m4a',
   'audio/ogg',
+  'audio/mp3',
+  'audio/x-m4a',
 ]);
 
 const storage = multer.diskStorage({
@@ -25,7 +27,9 @@ const storage = multer.diskStorage({
 });
 
 function fileFilter(req, file, cb) {
-  if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+  // Browsers report e.g. "audio/webm;codecs=opus" — compare only the base type.
+  const baseType = (file.mimetype || '').split(';')[0].trim().toLowerCase();
+  if (!ALLOWED_MIME_TYPES.has(baseType)) {
     const err = new Error('Unsupported audio type.');
     err.statusCode = 400;
     err.publicMessage = 'Unsupported audio format.';

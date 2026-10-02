@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import LoginForm from './components/Auth/LoginForm';
 import SignupForm from './components/Auth/SignupForm';
@@ -11,7 +13,9 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <ToastProvider>
         <BrowserRouter>
+          <ErrorBoundary>
           <Routes>
             <Route path="/login" element={<LoginForm />} />
             <Route path="/signup" element={<SignupForm />} />
@@ -34,7 +38,9 @@ export default function App() {
             <Route path="/" element={<Navigate to="/lobby" replace />} />
             <Route path="*" element={<Navigate to="/lobby" replace />} />
           </Routes>
+          </ErrorBoundary>
         </BrowserRouter>
+        </ToastProvider>
       </AuthProvider>
     </ThemeProvider>
   );

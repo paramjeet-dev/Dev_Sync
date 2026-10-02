@@ -45,17 +45,44 @@ tabs in the same profile share the auth cookie and so are the same user.
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/api/sessions/:sessionId/join` | Join with the room code (grants membership) |
 | GET | `/api/sessions` | Boards you created/joined (no canvas payload) |
+| PATCH | `/api/sessions/:sessionId` | Rename a board (creator only) |
+| PUT | `/api/sessions/:sessionId/thumbnail` | Save the board's small preview image (members only) |
 | DELETE | `/api/sessions/:sessionId` | Creator: delete for everyone. Others: remove from own list |
 
 Socket event `session:deleted` is emitted to a board's room when its creator deletes it.
+
+## Access control & persistence
+
+- **The room code is the invite.** Joining a board (`POST /api/sessions/:id/join`, done automatically when you open
+  an invite link) adds you to its members. Everything else — chat history, scene snapshot, the realtime socket —
+  requires membership and answers 404 otherwise. Failed join attempts are rate-limited (20 per 10 min per user),
+  and new codes are 12 hex characters.
+- **"Remove from my list" is not a ban.** Anyone who still has the code can rejoin.
+- **The server persists the board.** Every `scene:update` it relays is also written to MongoDB with atomic,
+  version-gated upserts (one document per element in `SceneElement`, images in `SceneFile`). Clients no longer
+  upload snapshots, so nothing is read-modify-written and the old 16MB per-board ceiling is gone.
+- **Migration:** boards saved by earlier versions (scene stored inside the `Session` document) are moved to the
+  new collections automatically at server start. It is idempotent.
+
+## Error handling
+
+- Every failed request goes through `getErrorMessage()`: the server's sanitized message when there is one,
+  a clear "can't reach the server" / "server problem" message otherwise — never axios or provider text.
+- A 401 on any API call or socket handshake means the login expired: the app returns to the login page with
+  a notice instead of failing silently.
+- Loading failures (boards list, chat history, saved whiteboard) show an inline message with **Retry** rather
+  than looking like an empty state. A React error boundary catches render crashes.
+- Destructive actions use dialogs (delete/remove board, clear board); results use toasts.
+- Chat sends time out after 8s and give the text back instead of losing it.
 
 ## Known limitations
 
 - Undo/redo is per-client (Excalidraw's local history), not collaborative.
 - Per-element last-writer-wins, not a CRDT.
 - Presence lives in one process's memory; scaling horizontally needs a shared store (e.g. Redis).
-- MongoDB's 16MB document limit bounds a single board's elements + embedded images.
+- Deleted-element tombstones and images are kept forever; there is no per-board size cap or pruning yet.
 - Boards created before the `members` field existed show only for their creator until others rejoin.
 
 Design docs are in `docs/`.

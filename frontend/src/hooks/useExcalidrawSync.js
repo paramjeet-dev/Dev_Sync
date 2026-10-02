@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 const BROADCAST_DEBOUNCE_MS = 80;
-// Snapshots are what a returning user sees days later; save often so little is lost on leave.
-const SNAPSHOT_SAVE_INTERVAL_MS = 5000;
 
 // Mirrors the backend's validation (backend/services/sessionService.js).
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB per image
@@ -25,6 +23,7 @@ function isAcceptableImageFile(file) {
  * Bridges an Excalidraw instance to the Socket.IO `scene:*` events.
  * - onChange is diffed against the last-broadcast version per element id; only changed elements are sent.
  * - Files (images) are diffed by fileId so each is broadcast once.
+ * - The server persists every delta it relays; clients no longer upload snapshots.
  * - Incoming batches merge element-by-element keeping the higher `version`
  *   (last-writer-wins per element; not a CRDT).
  */
@@ -88,7 +87,9 @@ export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
     if (!socket || !excalidrawAPI) return undefined;
 
     function mergeElements(incoming) {
-      const current = excalidrawAPI.getSceneElements();
+      // Include deleted elements: a remote tombstone must beat a stale visible copy, and a stale
+      // visible copy must not resurrect something we already deleted.
+      const current = excalidrawAPI.getSceneElementsIncludingDeleted();
       const byId = new Map(current.map((el) => [el.id, el]));
 
       incoming.forEach((el) => {
@@ -139,22 +140,6 @@ export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
     };
   }, [socket, excalidrawAPI]);
 
-  // Periodic snapshot persistence. Uses getSceneElementsIncludingDeleted so
-  // deletions (tombstones) are persisted too and don't reappear on restore.
-  useEffect(() => {
-    if (!socket || !connected || !excalidrawAPI) return undefined;
-
-    const interval = setInterval(() => {
-      const elements = excalidrawAPI.getSceneElementsIncludingDeleted();
-      const files = excalidrawAPI.getFiles();
-      if (elements.length > 0) {
-        socket.emit('scene:snapshot:save', { elements, files });
-      }
-    }, SNAPSHOT_SAVE_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [socket, connected, excalidrawAPI]);
-
   const clearScene = useCallback(() => {
     if (!excalidrawAPI) return;
     excalidrawAPI.resetScene();
@@ -163,13 +148,22 @@ export function useExcalidrawSync({ socket, connected, excalidrawAPI }) {
     socket?.emit('scene:clear');
   }, [excalidrawAPI, socket]);
 
+  // Merges the persisted snapshot into whatever is already on the board (live updates may have
+  // arrived while the snapshot was loading), keeping the higher version of each element.
   const loadInitialScene = useCallback(
     (elements, files) => {
       if (!excalidrawAPI || !elements || elements.length === 0) return;
       applyingRemoteRef.current = true;
       try {
-        excalidrawAPI.updateScene({ elements });
-        elements.forEach((el) => lastVersionsRef.current.set(el.id, el.version));
+        const byId = new Map(excalidrawAPI.getSceneElementsIncludingDeleted().map((el) => [el.id, el]));
+        elements.forEach((el) => {
+          const existing = byId.get(el.id);
+          if (!existing || el.version > existing.version) {
+            byId.set(el.id, el);
+            lastVersionsRef.current.set(el.id, el.version); // already persisted — don't re-broadcast
+          }
+        });
+        excalidrawAPI.updateScene({ elements: Array.from(byId.values()) });
         if (files && Object.keys(files).length > 0) {
           excalidrawAPI.addFiles(Object.values(files));
           Object.keys(files).forEach((fileId) => sentFileIdsRef.current.add(fileId));
