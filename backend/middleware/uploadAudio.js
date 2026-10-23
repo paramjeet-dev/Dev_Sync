@@ -3,7 +3,10 @@ const path = require('path');
 const multer = require('multer');
 const config = require('../config/env');
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'tmp');
+const UPLOAD_DIR = process.env.UPLOAD_DIR
+  ? path.resolve(process.env.UPLOAD_DIR)
+  : path.join('/tmp', 'uploads');
+
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const ALLOWED_MIME_TYPES = new Set([
